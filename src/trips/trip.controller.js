@@ -437,7 +437,7 @@ exports.deleteTrip = catchAsyncError(async (req, res, next) => {
   if (!tripWithTruck) {
     await truckModel.findByIdAndUpdate(trip.truck, { is_avail: true });
   }
-  await subTripModel.deleteOne({ trip: id });
+  // await subTripModel.deleteOne({ trip: id });
   await trip.deleteOne();
 
   res.status(200).json({

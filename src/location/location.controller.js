@@ -89,8 +89,8 @@ exports.deleteLocation = catchAsyncError(async (req, res, next) => {
     $or: [{ source: id }, { dest: id }]
   };
   const isAnyTrip = await tripModel.findOne(query);
-  const isAnySubTrip = await subTripModel.findOne(query);
-  if (isAnyTrip || isAnySubTrip) {
+  // const isAnySubTrip = await subTripModel.findOne(query);
+  if (isAnyTrip ) {
     return next(new ErrorHandler("This location can't be deleted due to some trip's location.", 400));
   }
 

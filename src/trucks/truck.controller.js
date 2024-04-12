@@ -9,9 +9,9 @@ const { v4: uuid } = require("uuid");
 exports.createTruck = catchAsyncError(async (req, res, next) => {
   console.log("createTruck", req.body);
 
-  const truck_id = `#${uuid().slice(0, 6)}`;
-  console.log({ truck_id })
-  const truck = await truckModel.create({ ...req.body, truck_id });
+  // const truck_id = `#${uuid().slice(0, 6)}`;
+  // console.log({ truck_id })
+  const truck = await truckModel.create({ ...req.body });
   res.status(201).json({ truck });
 });
 
