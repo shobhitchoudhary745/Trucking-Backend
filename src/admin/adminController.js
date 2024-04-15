@@ -124,3 +124,42 @@ exports.getDashBoardData = catchAsyncError(async (req, res, next) => {
     ],
   });
 });
+
+exports.createUser = catchAsyncError(async (req, res, next) => {
+  const {firstname, lastname, email, password, mobile_no, country_code} =
+    req.body;
+  let location = "";
+  const existingdriver = await userModel.findOne({
+    $or: [{ email }, { mobile_no }],
+  });
+
+  if (existingdriver) {
+    return next(
+      new ErrorHandler("Driver Already exist with this email/mobile", 400)
+    );
+  }
+
+  if (req.file) {
+    const result = await s3Uploadv2(req.file);
+    location = result.Location;
+  }
+
+  const driver = userModel.create({
+    firstname,
+    lastname,
+    email,
+    password,
+    mobile_no,
+    country_code,
+    isRegistered: true,
+    profile_url: location,
+  });
+
+  // await driver.save();
+
+  res.status(201).json({
+    success: true,
+    message: "Driver Created Successfully",
+    driver,
+  });
+});

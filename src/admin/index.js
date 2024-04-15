@@ -10,6 +10,7 @@ const {
   postSingleImage,
   calcCharge,
   getDashBoardData,
+  createUser,
 } = require("./adminController");
 
 router.post("/login", adminLogin);
@@ -35,6 +36,13 @@ router
 
 router.get("/logs/:date", auth, isAdmin, getAllLogs);
 router.get("/driver-log/:id", auth, isAdmin, getAllDriverLogs);
+router.post(
+  "/create-driver",
+  auth,
+  isAdmin,
+  upload.single("image"),
+  createUser
+);
 
 // ------------------------------------ TRIP ---------------------------------
 const { getAllTrip, getTrip, deleteTrip } = require("../trips");
