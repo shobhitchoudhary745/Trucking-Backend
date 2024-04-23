@@ -12,12 +12,15 @@ const populateTrip = [
   { path: "source_loc", select: "name lat long" },
   { path: "load_loc", select: "name lat long" },
   {
-    path: "unload_loc", select: "mill_name address", populate: {
-      path: "address", select: "name lat long"
-    }
+    path: "unload_loc",
+    select: "mill_name address",
+    populate: {
+      path: "address",
+      select: "name lat long",
+    },
   },
   { path: "end_loc", select: "name lat long" },
-  { path: "truck", select: "truck_id plate_no name" }
+  { path: "truck", select: "truck_id plate_no name" },
 ];
 
 // Create a new document
@@ -26,7 +29,7 @@ exports.createTrip = catchAsyncError(async (req, res, next) => {
   const { loc } = req.body;
   if (!loc) {
     return next(new ErrorHandler("Current Location is required", 400));
-  };
+  }
   loc.time = Date.now();
 
   const userId = req.userId;
@@ -36,7 +39,12 @@ exports.createTrip = catchAsyncError(async (req, res, next) => {
   }
 
   if (user.hasTrip) {
-    return next(new ErrorHandler("Your current trip is not completed. Can't start another one.", 400));
+    return next(
+      new ErrorHandler(
+        "Your current trip is not completed. Can't start another one.",
+        400
+      )
+    );
   }
 
   const { truck } = req.body;
@@ -51,7 +59,7 @@ exports.createTrip = catchAsyncError(async (req, res, next) => {
 
   const trip = await tripModel.create({
     ...req.body,
-    driver: [{ dId: userId, time: Date.now() }]
+    driver: [{ dId: userId, time: Date.now() }],
   });
   if (trip) {
     isAvailTruck.is_avail = false;
@@ -75,7 +83,9 @@ exports.getDriverTrip = catchAsyncError(async (req, res, next) => {
     return next(new ErrorHandler("No On-going trip", 400));
   }
 
-  const trip = await tripModel.findOne({ "driver.dId": userId, status: "on-going" }).populate(populateTrip);
+  const trip = await tripModel
+    .findOne({ "driver.dId": userId, status: "on-going" })
+    .populate(populateTrip);
   if (!trip) {
     return next(new ErrorHandler("No On-going trip", 400));
   }
@@ -87,7 +97,9 @@ exports.getTripHisDetail = catchAsyncError(async (req, res, next) => {
   const userId = req.userId;
   const { id } = req.params;
 
-  const trip = await tripModel.findOne({ "driver.dId": userId, _id: id }).populate(populateTrip);
+  const trip = await tripModel
+    .findOne({ "driver.dId": userId, _id: id })
+    .populate(populateTrip);
   if (!trip) {
     return next(new ErrorHandler("No On-going trip", 400));
   }
@@ -95,51 +107,69 @@ exports.getTripHisDetail = catchAsyncError(async (req, res, next) => {
   res.status(200).json({ trip });
 });
 
-// Shift Change 
+// Shift Change
 exports.shiftChange = catchAsyncError(async (req, res, next) => {
   console.log("shiftChange", req.body);
   const userId = req.userId;
   const { trip_id, loc } = req.body;
   if (!loc) {
     return next(new ErrorHandler("Current Location is required", 400));
-  };
+  }
   loc.time = Date.now();
   // const { trip_id, userId } = req.body;
 
   console.log({ trip_id, userId });
   const user = await userModel.findById(userId).select("+hasTrip");
   if (user.hasTrip) {
-    return next(new ErrorHandler("Your current trip is not completed. Can't overtake another one.", 400));
+    return next(
+      new ErrorHandler(
+        "Your current trip is not completed. Can't overtake another one.",
+        400
+      )
+    );
   }
 
   if (!isValidObjectId(trip_id)) {
     return next(new ErrorHandler("Invalid trip id.", 400));
   }
 
-  let trip = await tripModel.findOne({ _id: trip_id, status: "on-going" }).select("+driver");
+  let trip = await tripModel
+    .findOne({ _id: trip_id, status: "on-going" })
+    .select("+driver");
   if (!trip) {
     return next(new ErrorHandler("Trip Not Found or Trip is completed.", 404));
   }
 
   const prevDriverId = trip.driver[trip.driver.length - 1].dId;
-  const prevDriver = await userModel.findOne({ _id: prevDriverId, hasTrip: true });
+  const prevDriver = await userModel.findOne({
+    _id: prevDriverId,
+    hasTrip: true,
+  });
   if (!prevDriver) {
-    return next(new ErrorHandler("Trip is already overtaken / completed.", 400));
+    return next(
+      new ErrorHandler("Trip is already overtaken / completed.", 400)
+    );
   }
 
   const session = await mongoose.startSession();
   session.startTransaction();
   try {
-    trip = await tripModel.findByIdAndUpdate(trip_id, {
-      $push: {
-        driver: { dId: userId, time: Date.now() }
-      }
-    }, {
-      new: true,
-      runValidators: true,
-      validateBeforeSave: true,
-      session
-    }).populate(populateTrip);
+    trip = await tripModel
+      .findByIdAndUpdate(
+        trip_id,
+        {
+          $push: {
+            driver: { dId: userId, time: Date.now() },
+          },
+        },
+        {
+          new: true,
+          runValidators: true,
+          validateBeforeSave: true,
+          session,
+        }
+      )
+      .populate(populateTrip);
 
     await locRecordModel.findOneAndUpdate(
       { trip: trip._id },
@@ -154,7 +184,6 @@ exports.shiftChange = catchAsyncError(async (req, res, next) => {
 
     await session.commitTransaction();
     res.status(200).json({ trip, previousDriver: prevDriverId });
-
   } catch (err) {
     await session.abortTransaction();
     next(err);
@@ -170,7 +199,7 @@ const getMissingFields = (reqFields, body) => {
     .filter(([k, v]) => !body[k])
     .map(([k, v]) => reqFields[k])
     .join(", ")
-    .replace(/,([^,]*)$/, ' and$1');
+    .replace(/,([^,]*)$/, " and$1");
 };
 
 exports.updateTrip = catchAsyncError(async (req, res, next) => {
@@ -178,7 +207,7 @@ exports.updateTrip = catchAsyncError(async (req, res, next) => {
   const { loc } = req.body;
   if (!loc) {
     return next(new ErrorHandler("Current Location is required", 400));
-  };
+  }
   loc.time = Date.now();
 
   const { id } = req.params;
@@ -203,25 +232,26 @@ exports.updateTrip = catchAsyncError(async (req, res, next) => {
 
     case "UNLOAD_TRIP":
       var reqFields = {
-        "unload_loc": "Mill ID",
-        "prod_detail": "Product Details",
-        "slip_id": "Slip ID",
-        "block_no": "Block Number",
-        "load_milage": "Current Milage"
+        unload_loc: "Mill ID",
+        prod_detail: "Product Details",
+        slip_id: "Slip ID",
+        block_no: "Block Number",
+        load_milage: "Current Milage",
       };
       missingFields = getMissingFields(reqFields, req.body);
-      console.log({ missingFields })
+      console.log({ missingFields });
       if (missingFields) {
         return next(new ErrorHandler(`${missingFields} are required.`, 400));
       }
 
-      const { unload_loc, prod_detail, slip_id, block_no, load_milage } = req.body;
+      const { unload_loc, prod_detail, slip_id, block_no, load_milage } =
+        req.body;
       updatedData = { unload_loc, prod_detail, slip_id, block_no, load_milage };
 
       const files = req.files;
-      console.log({ files, c: files.length > 0 })
-      if (files && (files.length > 0)) {
-        const results = await s3UploadMulti(files, 'jeff');
+      console.log({ files, c: files.length > 0 });
+      if (files && files.length > 0) {
+        const results = await s3UploadMulti(files, "jeff");
         let location = results.map((result) => result.Location);
         updatedData.docs = location;
       }
@@ -246,13 +276,13 @@ exports.updateTrip = catchAsyncError(async (req, res, next) => {
 
     case "PRODUCT_DETAILS":
       var reqFields = {
-        "unload_milage": "Current Milage",
-        "gross_wt": "Gross Wt.",
-        "tare_wt": "Tare Wt.",
-        "net_wt": "Net Wt."
+        unload_milage: "Current Milage",
+        gross_wt: "Gross Wt.",
+        tare_wt: "Tare Wt.",
+        net_wt: "Net Wt.",
       };
       missingFields = getMissingFields(reqFields, req.body);
-      console.log({ missingFields })
+      console.log({ missingFields });
       if (missingFields) {
         return next(new ErrorHandler(`${missingFields} are required.`, 400));
       }
@@ -288,17 +318,21 @@ exports.updateTrip = catchAsyncError(async (req, res, next) => {
       }
 
       updatedData.end_time = Date.now();
-      updatedData.status = 'completed';
+      updatedData.status = "completed";
       record = { end_loc: loc };
       break;
   }
 
   console.log(updatedData, Object.entries(req.body));
-  const trip = await tripModel.findOneAndUpdate({ _id: id, status: 'on-going' }, updatedData, {
-    new: true,
-    runValidators: true,
-    validateBeforeSave: true
-  });
+  const trip = await tripModel.findOneAndUpdate(
+    { _id: id, status: "on-going" },
+    updatedData,
+    {
+      new: true,
+      runValidators: true,
+      validateBeforeSave: true,
+    }
+  );
   if (!trip) {
     return next(new ErrorHandler("Trip not found.", 404));
   }
@@ -313,16 +347,15 @@ exports.updateTrip = catchAsyncError(async (req, res, next) => {
   res.status(200).json({ trip });
 });
 
-
-const lookUp = (key) => ([
+const lookUp = (key) => [
   {
     $lookup: {
       from: "locations",
       foreignField: "_id",
       localField: key,
       // as: `_${key}`
-      as: `${key}`
-    }
+      as: `${key}`,
+    },
   },
   { $unwind: { path: `$${key}`, preserveNullAndEmptyArrays: true } },
   {
@@ -331,9 +364,9 @@ const lookUp = (key) => ([
       [`${key}.updatedAt`]: 0,
       [`${key}._id`]: 0,
       [`${key}.__v`]: 0,
-    }
-  }
-]);
+    },
+  },
+];
 
 // Trip History
 exports.getTripHistory = catchAsyncError(async (req, res, next) => {
@@ -342,8 +375,8 @@ exports.getTripHistory = catchAsyncError(async (req, res, next) => {
     {
       $match: {
         "driver.dId": new mongoose.Types.ObjectId(userId),
-        status: "completed"
-      }
+        status: "completed",
+      },
     },
     ...lookUp("source_loc"),
     ...lookUp("end_loc"),
@@ -352,8 +385,8 @@ exports.getTripHistory = catchAsyncError(async (req, res, next) => {
         from: "trucks",
         localField: "truck",
         foreignField: "_id",
-        as: "truck"
-      }
+        as: "truck",
+      },
     },
     { $unwind: { path: "$truck", preserveNullAndEmptyArrays: true } },
     {
@@ -363,8 +396,8 @@ exports.getTripHistory = catchAsyncError(async (req, res, next) => {
         "truck.createdAt": 0,
         "truck.updatedAt": 0,
         "truck.__v": 0,
-      }
-    }
+      },
+    },
   ];
 
   // console.log({ aggregateQry: JSON.stringify(aggregateQry) })
@@ -373,20 +406,25 @@ exports.getTripHistory = catchAsyncError(async (req, res, next) => {
   res.status(200).json({ trips });
 });
 
-
 // --------------------------------- ADMIN ----------------------------------------
 // Get a single document by ID
 exports.getTrip = catchAsyncError(async (req, res, next) => {
   const { id } = req.params;
-  console.log("getTrip: trip id = ", id)
+  console.log("getTrip: trip id = ", id);
   if (!isValidObjectId(id)) {
     return next(new ErrorHandler("Invalid Trip ID", 400));
   }
 
-  const trip = await tripModel.findById(id).select("+driver").populate([
-    ...populateTrip,
-    { path: "driver.dId", select: "firstname lastname mobile_no country_code" },
-  ]);
+  const trip = await tripModel
+    .findById(id)
+    .select("+driver")
+    .populate([
+      ...populateTrip,
+      {
+        path: "driver.dId",
+        select: "firstname lastname mobile_no country_code",
+      },
+    ]);
   if (!trip) {
     return next(new ErrorHandler("Trip Not Found", 404));
   }
@@ -423,25 +461,28 @@ exports.deleteTrip = catchAsyncError(async (req, res, next) => {
   const { id } = req.params;
   let trip = await tripModel.findById(id);
 
-  if (!trip)
-    return next(new ErrorHandler("Trip not found", 404));
+  if (!trip) return next(new ErrorHandler("Trip not found", 404));
 
   // first check if truck is used in any on-going trip (different with this trip),
   // if so, then do nothing
   // other make is_avail true
   const tripWithTruck = await tripModel.findOne({
     truck: trip.truck,
-    status: 'on-going',
-    _id: { $ne: trip._id }
+    status: "on-going",
+    _id: { $ne: trip._id },
   });
   if (!tripWithTruck) {
     await truckModel.findByIdAndUpdate(trip.truck, { is_avail: true });
   }
   // await subTripModel.deleteOne({ trip: id });
+  const user = await userModel
+    .findById(trip.driver[trip.driver.length - 1].dId)
+    .select("+hasTrip");
   await trip.deleteOne();
+  user.hasTrip = false;
+  await user.save();
 
   res.status(200).json({
     message: "Trip Deleted successfully.",
   });
 });
-
