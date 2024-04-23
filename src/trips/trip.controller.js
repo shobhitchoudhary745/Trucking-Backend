@@ -10,7 +10,7 @@ const millModel = require("../mill/mill.model");
 
 const populateTrip = [
   { path: "source_loc", select: "name lat long" },
-  { path: "load_loc", select: "name lat long" },
+  { path: "load_loc", select: "name lat long" }, 
   {
     path: "unload_loc",
     select: "mill_name address",
