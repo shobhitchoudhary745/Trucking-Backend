@@ -10,7 +10,7 @@ const millModel = require("../mill/mill.model");
 
 const populateTrip = [
   { path: "source_loc", select: "name lat long" },
-  { path: "load_loc", select: "name lat long" }, 
+  { path: "load_loc", select: "name lat long" },
   {
     path: "unload_loc",
     select: "mill_name address",
@@ -478,9 +478,9 @@ exports.deleteTrip = catchAsyncError(async (req, res, next) => {
   const user = await userModel
     .findById(trip.driver[trip.driver.length - 1].dId)
     .select("+hasTrip");
-  await trip.deleteOne();
   user.hasTrip = false;
   await user.save();
+  await trip.deleteOne();
 
   res.status(200).json({
     message: "Trip Deleted successfully.",
