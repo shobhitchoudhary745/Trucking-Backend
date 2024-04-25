@@ -476,7 +476,7 @@ exports.deleteTrip = catchAsyncError(async (req, res, next) => {
   }
   // await subTripModel.deleteOne({ trip: id });
   for (let user of trip.driver) {
-    const user = await userModel.findById(user.dId);
+    const user = await userModel.findById(user.dId).select("+hasTrip");
     user.hasTrip = false;
     await user.save();
   }
