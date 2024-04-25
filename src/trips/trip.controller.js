@@ -475,11 +475,11 @@ exports.deleteTrip = catchAsyncError(async (req, res, next) => {
     await truckModel.findByIdAndUpdate(trip.truck, { is_avail: true });
   }
   // await subTripModel.deleteOne({ trip: id });
-  const user = await userModel
-    .findById(trip.driver[trip.driver.length - 1].dId)
-    .select("+hasTrip");
-  user.hasTrip = false;
-  await user.save();
+  for (let user of trip.driver) {
+    const user = await userModel.findById(user.dId);
+    user.hasTrip = false;
+    await user.save();
+  }
   await trip.deleteOne();
 
   res.status(200).json({
