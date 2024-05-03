@@ -1,38 +1,46 @@
-const { default: mongoose, isValidObjectId, mongo } = require('mongoose');
+const { default: mongoose, isValidObjectId, mongo } = require("mongoose");
 
-const fs = require('fs');
-const path = require('path');
+const fs = require("fs");
+const path = require("path");
 const ErrorHandler = require("../../utils/errorHandler");
 const catchAsyncError = require("../../utils/catchAsyncError");
 const APIFeatures = require("../../utils/apiFeatures");
 const { userModel, logModel, otpModel } = require("./user.model");
-const { s3Uploadv2 } = require('../../utils/s3');
-const sendEmail = require('../../utils/sendEmail');
-const { optGenerator } = require('../../utils/randGenerator');
+const { s3Uploadv2 } = require("../../utils/s3");
+const sendEmail = require("../../utils/sendEmail");
+const { optGenerator } = require("../../utils/randGenerator");
+const locationModel = require("./user.location.model");
 
 const { TWILIO_ACCOUNT_SID, TWILIO_AUTH_TOKEN, SERVICE_SID } = process.env;
 const client = require("twilio")(TWILIO_ACCOUNT_SID, TWILIO_AUTH_TOKEN);
 
 const findUser = async (options, next) => {
-  console.log("FIND_USER", { options })
+  console.log("FIND_USER", { options });
   const user = await userModel.findOne(options);
-  console.log({ user })
+  console.log({ user });
   if (!user) {
-    return next(new ErrorHandler("User with mobile number is not registered.", 404));
+    return next(
+      new ErrorHandler("User with mobile number is not registered.", 404)
+    );
   }
 
   return user;
 };
 
 const sendOTP = async (phoneNo) => {
-  return await client.verify.v2.services(SERVICE_SID).verifications.create({ to: phoneNo, channel: "sms" });
+  return await client.verify.v2
+    .services(SERVICE_SID)
+    .verifications.create({ to: phoneNo, channel: "sms" });
 };
 
 const verifyOTP = async (phoneNo, code) => {
-  const { status, valid } = await client.verify.v2.services(SERVICE_SID).verificationChecks.create({ to: phoneNo, code: code });
-  if (status === 'pending' && !valid) throw new ErrorHandler("Invalid OTP", 401);
+  const { status, valid } = await client.verify.v2
+    .services(SERVICE_SID)
+    .verificationChecks.create({ to: phoneNo, code: code });
+  if (status === "pending" && !valid)
+    throw new ErrorHandler("Invalid OTP", 401);
   return valid;
-}
+};
 
 // Create a new document
 exports.createUser = catchAsyncError(async (req, res, next) => {
@@ -42,19 +50,30 @@ exports.createUser = catchAsyncError(async (req, res, next) => {
   const session = await mongoose.startSession();
   session.startTransaction();
   try {
-    let user = await userModel.findOne({ mobile_no: req.body.mobile_no }).select("+isRegistered");
-    console.log({ user })
+    let user = await userModel
+      .findOne({ mobile_no: req.body.mobile_no })
+      .select("+isRegistered");
+    console.log({ user });
     if (!user) {
       user = (await userModel.create([req.body], { session }))[0];
     } else {
       if (user.isRegistered)
-        return next(new ErrorHandler("User is already registered with this mobile number.", 400));
+        return next(
+          new ErrorHandler(
+            "User is already registered with this mobile number.",
+            400
+          )
+        );
       else {
-        await userModel.findOneAndUpdate({ mobile_no: req.body.mobile_no }, req.body, {
-          new: true,
-          runValidators: true,
-          validateBeforeSave: true
-        });
+        await userModel.findOneAndUpdate(
+          { mobile_no: req.body.mobile_no },
+          req.body,
+          {
+            new: true,
+            runValidators: true,
+            validateBeforeSave: true,
+          }
+        );
       }
     }
 
@@ -63,7 +82,6 @@ exports.createUser = catchAsyncError(async (req, res, next) => {
 
     await session.commitTransaction();
     res.status(201).json({ message: "OTP sent successfully" });
-
   } catch (err) {
     await session.abortTransaction();
     next(err);
@@ -82,7 +100,7 @@ exports.login = catchAsyncError(async (req, res, next) => {
 
   const user = await findUser({ mobile_no, isRegistered: true }, next);
   const phoneNo = `${user.country_code}${mobile_no}`;
-  console.log({ phoneNo, user })
+  console.log({ phoneNo, user });
   const messageRes = await sendOTP(phoneNo);
 
   res.status(200).json({ message: "OTP sent successfully" });
@@ -102,7 +120,7 @@ exports.verifyOtp = catchAsyncError(async (req, res, next) => {
 
   const user = await findUser({ mobile_no }, next);
   const phoneNo = `${user.country_code}${mobile_no}`;
-  console.log({ phoneNo, user })
+  console.log({ phoneNo, user });
   const messageRes = await verifyOTP(phoneNo, code);
   console.log({ messageRes });
   user.isRegistered = true;
@@ -110,9 +128,10 @@ exports.verifyOtp = catchAsyncError(async (req, res, next) => {
 
   const token = await user.getJWTToken();
   res.status(200).json({
-    user, token,
+    user,
+    token,
     message: "OTP verified successfully",
-  })
+  });
 });
 
 // resend OTP
@@ -124,7 +143,7 @@ exports.resendOTP = catchAsyncError(async (req, res, next) => {
 
   const user = await findUser({ mobile_no, isRegistered: true }, next);
   const phoneNo = `${user.country_code}${mobile_no}`;
-  console.log({ phoneNo, user })
+  console.log({ phoneNo, user });
   const messageRes = await sendOTP(phoneNo);
 
   res.status(200).json({ message: "OTP sent successfully" });
@@ -157,17 +176,20 @@ exports.verifyEmail = catchAsyncError(async (req, res, next) => {
       await otpInstance.save({ session });
     }
 
-    const template = fs.readFileSync(path.join(__dirname + `/verifyEmail.html`), "utf-8")
+    const template = fs.readFileSync(
+      path.join(__dirname + `/verifyEmail.html`),
+      "utf-8"
+    );
     // /{{(\w+)}}/g - match {{Word}} globally
     const renderedTemplate = template.replace(/{{(\w+)}}/g, (match, key) => {
-      console.log({ match, key })
+      console.log({ match, key });
       return otp || match;
     });
 
     await sendEmail({
       subject: `Email Verification`,
       email,
-      message: renderedTemplate
+      message: renderedTemplate,
     });
 
     await session.commitTransaction();
@@ -175,7 +197,6 @@ exports.verifyEmail = catchAsyncError(async (req, res, next) => {
       success: true,
       message: "OTP sent successfully",
     });
-
   } catch (err) {
     await session.abortTransaction();
     next(err);
@@ -213,10 +234,9 @@ exports.verifyEmailOTP = catchAsyncError(async (req, res, next) => {
 
   res.status(200).json({
     success: true,
-    message: "OTP verified successfully"
-  })
-})
-
+    message: "OTP verified successfully",
+  });
+});
 
 // Get Profile
 exports.getProfile = catchAsyncError(async (req, res, next) => {
@@ -234,7 +254,7 @@ exports.updateProfile = catchAsyncError(async (req, res, next) => {
   const userId = req.userId;
   const file = req.file;
   if (file) {
-    const results = await s3Uploadv2(file, 'jeff');
+    const results = await s3Uploadv2(file, "jeff");
     const location = results.Location && results.Location;
     req.body.profile_url = location;
   }
@@ -247,7 +267,7 @@ exports.updateProfile = catchAsyncError(async (req, res, next) => {
   const user = await userModel.findByIdAndUpdate(userId, req.body, {
     new: true,
     runValidators: true,
-    validateBeforeSave: true
+    validateBeforeSave: true,
   });
 
   res.status(200).json({ message: "Profile Updated Successfully.", user });
@@ -260,10 +280,13 @@ exports.getAllUser = catchAsyncError(async (req, res, next) => {
 
   // Deleting Unregistered users.
   const expired = new Date(Date.now() - 10 * 60 * 1000);
-  await userModel.deleteMany({ createdAt: { $lt: expired }, isRegistered: false });
+  await userModel.deleteMany({
+    createdAt: { $lt: expired },
+    isRegistered: false,
+  });
 
   const apiFeature = new APIFeatures(
-    userModel.find({ role: 'driver' }).sort({ createdAt: -1 }),
+    userModel.find({ role: "driver" }).sort({ createdAt: -1 }),
     req.query
   ).search("firstname");
 
@@ -288,8 +311,7 @@ exports.getUser = catchAsyncError(async (req, res, next) => {
   }
 
   const user = await userModel.findById(id);
-  if (!user)
-    return next(new ErrorHandler("User Not Found", 404));
+  if (!user) return next(new ErrorHandler("User Not Found", 404));
 
   res.status(200).json({ user });
 });
@@ -315,9 +337,7 @@ exports.deleteUser = catchAsyncError(async (req, res, next) => {
   const userId = req.userId;
 
   const user = await userModel.findById(id || userId);
-  if (!user)
-    return next(new ErrorHandler("Driver not found", 404));
-
+  if (!user) return next(new ErrorHandler("Driver not found", 404));
 
   await user.deleteOne();
 
@@ -339,15 +359,17 @@ exports.getAllLogs = catchAsyncError(async (req, res, next) => {
 
   const nextDate = new Date(date).setDate(date.getDate() + 1);
   console.log({ date, nextDate: new Date(nextDate) });
-  const logs = await logModel.find({
-    start: { $gte: date, $lt: nextDate }
-  }).populate([{ path: "user", select: "firstname lastname" }]);
+  const logs = await logModel
+    .find({
+      start: { $gte: date, $lt: nextDate },
+    })
+    .populate([{ path: "user", select: "firstname lastname" }]);
 
   res.status(200).json({ logs });
 });
 
 exports.getAllDriverLogs = catchAsyncError(async (req, res, next) => {
-  console.log("getAllDriverLogs", req.params, req.query)
+  console.log("getAllDriverLogs", req.params, req.query);
   const { id } = req.params;
   const { from, to } = req.query;
 
@@ -361,7 +383,7 @@ exports.getAllDriverLogs = catchAsyncError(async (req, res, next) => {
 
   const userLogs = await logModel.find({
     user: id,
-    start: { $gte: new Date(from), $lte: nextDate }
+    start: { $gte: new Date(from), $lte: nextDate },
   });
 
   res.status(200).json({ userLogs, user });
@@ -376,7 +398,9 @@ exports.checkIn = catchAsyncError(async (req, res, next) => {
 
 exports.checkOut = catchAsyncError(async (req, res, next) => {
   const userId = req.userId;
-  const log = await logModel.findOne({ user: userId, end: null }).sort({ createdAt: -1 });
+  const log = await logModel
+    .findOne({ user: userId, end: null })
+    .sort({ createdAt: -1 });
 
   console.log({ log });
   if (!log) {
@@ -387,4 +411,29 @@ exports.checkOut = catchAsyncError(async (req, res, next) => {
   await log.save();
 
   res.status(200).json({ success: true });
+});
+
+exports.saveUserLocation = catchAsyncError(async (req, res, next) => {
+  const userId = req.userId;
+  const { lat, lon } = req.body;
+  const userLocation = await locationModel.findById({ user: userId });
+  if (!userLocation) {
+    await locationModel.create({ user: userId, lat, lon });
+  } else {
+    userLocation.lat = lat;
+    userLocation.lon = lon;
+    await userLocation.save();
+  }
+
+  res
+    .status(200)
+    .json({ success: true, message: "Location Saved successfully" });
+});
+
+exports.getUsersLocation = catchAsyncError(async (req, res, next) => {
+  const userLocations = await locationModel
+    .find()
+    .populate("user", "firstname lastname")
+    .lean();
+  res.status(200).json({ success: true, userLocations });
 });
