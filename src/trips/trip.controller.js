@@ -488,3 +488,26 @@ exports.deleteTrip = catchAsyncError(async (req, res, next) => {
     message: "Trip Deleted successfully.",
   });
 });
+
+exports.cancelTrip = catchAsyncError(async (req, res, next) => {
+  const { id } = req.params;
+  let trip = await tripModel.findById(id);
+
+  if (!trip) return next(new ErrorHandler("Trip not found", 404));
+
+  for (let user of trip.driver) {
+    const users = await userModel.findById(user.dId).select("+hasTrip");
+    if (users && users?.hasTrip) {
+      users.hasTrip = false;
+      await users.save();
+    }
+  }
+  const truck = await truckModel.findById(trip.truck);
+  truck.is_avail = true;
+  await truck.save();
+  trip.status = "canceled";
+  await trip.save();
+  res.status(200).json({
+    message: "Trip Deleted successfully.",
+  });
+});

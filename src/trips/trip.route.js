@@ -1,19 +1,29 @@
 const express = require("express");
 const router = express.Router();
 const { auth } = require("../../middlewares/auth");
-const { createTrip, getDriverTrip, getTripHistory, updateTrip, createSubTrip, updateSubTrip, shiftChange, getTripHisDetail } = require("./trip.controller");
+const {
+  createTrip,
+  getDriverTrip,
+  getTripHistory,
+  updateTrip,
+  createSubTrip,
+  updateSubTrip,
+  shiftChange,
+  getTripHisDetail,
+  cancelTrip,
+} = require("./trip.controller");
 const { upload } = require("../../utils/s3");
 
-router.route("/")
-  .post(auth, createTrip)
-  .get(auth, getTripHistory);
+router.route("/").post(auth, createTrip).get(auth, getTripHistory);
 
 router.put("/shift-change", auth, shiftChange);
 router.get("/current", auth, getDriverTrip);
 router.get("/history/:id", auth, getTripHisDetail);
 
-router.route("/:id")
+router
+  .route("/:id")
   .put(auth, upload.array("docs"), updateTrip) // update - anything
   .get(auth, getDriverTrip);
+router.patch("/cancel-trip/:id", auth, cancelTrip);
 
 module.exports = router;
