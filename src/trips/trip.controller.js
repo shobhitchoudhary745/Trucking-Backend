@@ -434,9 +434,11 @@ exports.getTrip = catchAsyncError(async (req, res, next) => {
 
 // Get all documents
 exports.getAllTrip = catchAsyncError(async (req, res, next) => {
-  console.log("getAllTrip", req.query);
+  // console.log("getAllTrip", req.query);
 
-  const { status, keyword, currentPage, resultPerPage } = req.query;
+  const { status, keyword, currentPage, resultPerPage, currentDriver } =
+    req.query;
+  delete req.query.currentDriver;
 
   const apiFeature = new APIFeatures(
     tripModel.find({ status }).sort({ createdAt: -1 }).populate(populateTrip),
@@ -444,15 +446,23 @@ exports.getAllTrip = catchAsyncError(async (req, res, next) => {
   );
 
   let trips = await apiFeature.query;
-  console.log("trips", trips);
-  let tripCount = trips.length;
-  if (resultPerPage && currentPage) {
-    apiFeature.pagination();
+  if (currentDriver)
+    trips = trips.filter((trip) =>
+      trip.driver.map((d) => d.dId.toString()).includes(currentDriver)
+    );
 
-    console.log("tripCount", tripCount);
-    trips = await apiFeature.query.clone();
+  let tripCount = trips.length;
+  // console.log("trips", trips, tripCount);
+  if (resultPerPage && currentPage) {
+    trips = trips.slice(
+      (Number(currentPage) - 1) * 10,
+      (Number(currentPage) - 1) * 10 + Number(resultPerPage)
+    );
+    // apiFeature.pagination();
+    // console.log("tripCount", tripCount);
+    // trips = await apiFeature.query.clone();
   }
-  console.log("trips", trips);
+  // console.log("trips", trips);
   res.status(200).json({ trips, tripCount });
 });
 
